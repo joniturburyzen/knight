@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>Caballero Medieval - Nivel 1</title>
+  <title>Caballero en Silla - Nivel 1</title>
   <style>
     * { margin: 0; padding: 0; touch-action: none; }
     body {
-      background: #1a1a2e;
+      background: #0f0f1b;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -16,10 +16,10 @@
       font-family: Arial, sans-serif;
     }
     canvas {
-      border: 3px solid #4e4e7a;
+      border: 3px solid #3a3a5a;
       border-radius: 8px;
       background: #87CEEB;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      box-shadow: 0 0 25px rgba(0,0,0,0.7);
       max-width: 100%;
       max-height: 90vh;
     }
@@ -29,39 +29,43 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0,0,0,0.85);
+      background: rgba(0,0,0,0.88);
       color: white;
       display: flex;
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      font-size: 24px;
+      font-size: 28px;
       display: none;
       text-align: center;
       padding: 20px;
+      z-index: 100;
     }
     button {
-      background: #4CAF50;
+      background: #ff6b6b;
       color: white;
       border: none;
-      padding: 12px 30px;
-      font-size: 18px;
-      border-radius: 30px;
-      margin-top: 20px;
+      padding: 15px 40px;
+      font-size: 22px;
+      border-radius: 50px;
+      margin-top: 25px;
       cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+      box-shadow: 0 6px 15px rgba(0,0,0,0.4);
+      font-weight: bold;
     }
-    button:hover { background: #45a049; }
+    button:hover { background: #ff5252; transform: scale(1.05); }
     #instructions {
       position: absolute;
-      bottom: 10px;
+      bottom: 15px;
       color: white;
-      background: rgba(0,0,0,0.6);
-      padding: 8px 15px;
-      border-radius: 20px;
-      font-size: 14px;
+      background: rgba(0,0,0,0.7);
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 16px;
       text-align: center;
       max-width: 90%;
+      z-index: 10;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.5);
     }
   </style>
 </head>
@@ -70,13 +74,13 @@
   
   <div id="gameOver">
     <div>☠️ ¡HAS PERDIDO!</div>
-    <div style="font-size:18px; margin:10px 0">Vidas agotadas</div>
+    <div style="font-size:20px; margin:15px 0">Vidas agotadas</div>
     <button onclick="resetGame()">🔁 Jugar de nuevo</button>
   </div>
   
   <div id="levelComplete">
     <div>🎉 ¡NIVEL 1 COMPLETADO!</div>
-    <div style="font-size:18px; margin:10px 0">¡Embriagado y victorioso! 🍻</div>
+    <div style="font-size:20px; margin:15px 0">¡Cerveza bien merecida! 🍻</div>
     <button onclick="resetGame()">➡️ Siguiente nivel (próximamente)</button>
   </div>
   
@@ -94,6 +98,21 @@
     const gameOverScreen = document.getElementById('gameOver');
     const levelCompleteScreen = document.getElementById('levelComplete');
     
+    // Dimensiones del nivel completo (3 pantallas × 360px)
+    const LEVEL_WIDTH = 1080;
+    const LEVEL_HEIGHT = 200;
+    
+    // Cámara (sigue al jugador)
+    const camera = {
+      x: 0,
+      y: 0,
+      update: function(player) {
+        this.x = player.x - canvas.width / 2;
+        if (this.x < 0) this.x = 0;
+        if (this.x > LEVEL_WIDTH - canvas.width) this.x = LEVEL_WIDTH - canvas.width;
+      }
+    };
+    
     // Estado del juego
     const gameState = {
       playing: true,
@@ -106,106 +125,81 @@
     };
     
     // ======================
-    // JUGADOR (CABALLERO)
+    // JUGADOR (EMOJI DE SILLA)
     // ======================
     const player = {
-      x: 30, // Empieza a la izquierda
-      y: 0,
-      width: 20,
-      height: 30,
-      speed: 1.5,
+      x: 50,
+      y: 100,
+      radius: 18, // Radio de colisión (invisible)
+      speed: 2,
       direction: 1, // 1 = derecha, -1 = izquierda
       velY: 0,
       jumping: false,
       grounded: false,
-      emoji: '🤴', // Caballero sin espada
-      baseY: canvas.height - 40 // Nivel del suelo base
+      emojiRight: '🧑‍🦽‍➡️', // Emoji para derecha
+      emojiLeft: '🧑‍🦽‍⬅️',  // Emoji para izquierda
+      currentEmoji: '🧑‍🦽‍➡️' // Empezamos mirando a la derecha
     };
-    player.y = player.baseY - player.height; // Posición inicial en el suelo
     
     // ======================
-    // PLATAFORMAS Y NIVEL
+    // PLATAFORMAS (SOLO ESTAS EXISTEN)
     // ======================
     const platforms = [
-      // PANTALLA 1 (0-360px): Abismos para saltar
-      {x: 0, y: player.baseY, w: 80, h: 20, color: '#8B4513'},   // Plataforma inicio
-      {x: 140, y: player.baseY, w: 60, h: 20, color: '#8B4513'}, // Primera plataforma después de abismo
-      {x: 260, y: player.baseY, w: 100, h: 20, color: '#8B4513'},// Segunda plataforma
+      // PANTALLA 1 (0-360px)
+      {x: 0, y: 160, w: 80, h: 20, color: '#8B4513'},
+      {x: 140, y: 160, w: 60, h: 20, color: '#8B4513'},
+      {x: 260, y: 160, w: 100, h: 20, color: '#8B4513'},
       
-      // PANTALLA 2 (360-720px): Fantasma + Espada + Plataforma desapareciente
-      {x: 360, y: player.baseY, w: 120, h: 20, color: '#5D4037'}, // Suelo inicio pantalla 2
-      {x: 520, y: player.baseY - 80, w: 60, h: 15, color: '#4E342E'}, // Plataforma media para espada
-      {x: 580, y: player.baseY - 150, w: 60, h: 15, color: '#3E2723'}, // Plataforma ALTA de la espada
-      {x: 650, y: player.baseY, w: 70, h: 20, color: '#5D4037'}, // Suelo después de espada
+      // PANTALLA 2 (360-720px)
+      {x: 360, y: 160, w: 120, h: 20, color: '#5D4037'},
+      {x: 520, y: 80, w: 60, h: 15, color: '#4E342E'},
+      {x: 580, y: 10, w: 60, h: 15, color: '#3E2723'},
+      {x: 650, y: 160, w: 70, h: 20, color: '#5D4037'},
       
-      // PANTALLA 3 (720-1080px): Final con cerveza
-      {x: 720, y: player.baseY, w: 100, h: 20, color: '#3E2723'}, // Suelo inicio pantalla 3
-      {x: 850, y: player.baseY, w: 150, h: 20, color: '#2E1B1B'}, // Suelo antes del abismo final
-      {x: 1030, y: player.baseY, w: 50, h: 20, color: '#FFD700'}  // Plataforma final con cerveza
+      // PANTALLA 3 (720-1080px)
+      {x: 720, y: 160, w: 100, h: 20, color: '#3E2723'},
+      {x: 850, y: 160, w: 150, h: 20, color: '#2E1B1B'},
+      {x: 1030, y: 160, w: 50, h: 20, color: '#FFD700'}
     ];
     
-    // Plataforma que desaparece (Pantalla 2 -> Pantalla 3)
+    // Plataforma que desaparece
     const disappearingPlatform = {
       x: 780,
-      y: player.baseY,
+      y: 160,
       w: 70,
       h: 20,
       visible: true,
-      visibleTime: 2000, // Visible 2 segundos
-      invisibleTime: 3000, // Invisible 3 segundos
+      visibleTime: 120,
+      invisibleTime: 180,
       timer: 0,
-      state: 'visible' // 'visible' o 'invisible'
+      state: 'visible'
     };
     
     // ======================
     // ENEMIGOS (FANTASMAS)
     // ======================
     const ghosts = [
-      // Fantasma 1: Pantalla 2 (nada más empezar)
-      {x: 400, y: player.baseY - 30, w: 25, h: 30, 
-       dir: -1, range: 60, startX: 400, emoji: '👻', alive: true},
-      
-      // Fantasma 2: Después de la espada
-      {x: 870, y: player.baseY - 30, w: 25, h: 30, 
-       dir: 1, range: 80, startX: 870, emoji: '👻', alive: true},
-      
-      // Fantasma 3: Cerca del final
-      {x: 920, y: player.baseY - 30, w: 25, h: 30, 
-       dir: -1, range: 50, startX: 920, emoji: '👻', alive: true}
+      {x: 420, y: 130, radius: 12, dir: -1, range: 60, startX: 420, color: '#ffffff', alive: true},
+      {x: 870, y: 130, radius: 12, dir: 1, range: 80, startX: 870, color: '#ffffff', alive: true},
+      {x: 920, y: 130, radius: 12, dir: -1, range: 50, startX: 920, color: '#ffffff', alive: true}
     ];
     
     // ======================
     // POWER-UPS Y OBJETIVOS
     // ======================
-    const sword = {
-      x: 605, 
-      y: player.baseY - 175, 
-      w: 25, 
-      h: 25, 
-      collected: false,
-      emoji: '⚔️'
-    };
-    
-    const beer = {
-      x: 1045,
-      y: player.baseY - 40,
-      w: 30,
-      h: 40,
-      collected: false,
-      emoji: '🍺'
-    };
+    const sword = {x: 605, y: -5, radius: 10, collected: false, color: '#ffd700'};
+    const beer = {x: 1050, y: 135, radius: 15, collected: false, color: '#ff9900'};
     
     // ======================
     // FÍSICA Y CONTROLES
     // ======================
-    const gravity = 0.5;
-    const jumpPower = -11;
+    const gravity = 0.6;
+    const jumpPower = -13;
     let touchStartX = 0;
     let touchStartTime = 0;
-    const swipeThreshold = 50; // px para detectar swipe
-    const maxTapTime = 300; // ms para diferenciar tap de swipe
+    const swipeThreshold = 50;
+    const maxTapTime = 300;
     
-    // Detectar swipe y toque
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       touchStartX = e.touches[0].clientX;
@@ -218,14 +212,14 @@
       const touchDuration = Date.now() - touchStartTime;
       const diffX = touchEndX - touchStartX;
       
-      // Si fue un swipe (movimiento rápido y largo)
       if (Math.abs(diffX) > swipeThreshold && touchDuration < 500) {
-        player.direction = (diffX > 0) ? 1 : -1; // Derecha si swipe positivo
+        player.direction = (diffX > 0) ? 1 : -1;
+        player.currentEmoji = (player.direction > 0) ? player.emojiRight : player.emojiLeft;
       } 
-      // Si fue un toque corto (salto)
-      else if (touchDuration < maxTapTime && !player.jumping) {
+      else if (touchDuration < maxTapTime && player.grounded) {
         player.velY = jumpPower;
         player.jumping = true;
+        player.grounded = false;
       }
     }, { passive: false });
     
@@ -235,52 +229,41 @@
     function update() {
       if (!gameState.playing || gameState.levelComplete || gameState.gameOver) return;
       
-      // Movimiento horizontal automático (siempre en movimiento)
       player.x += player.speed * player.direction;
       
-      // Gravedad y salto
       player.velY += gravity;
       player.y += player.velY;
       
-      // Colisión con suelo base
-      if (player.y + player.height > player.baseY) {
-        player.y = player.baseY - player.height;
-        player.velY = 0;
-        player.jumping = false;
-        player.grounded = true;
-      } else {
-        player.grounded = false;
-      }
+      player.grounded = false;
       
       // Colisión con plataformas
-      player.grounded = false;
       platforms.forEach(platform => {
-        if (player.x + player.width > platform.x && 
-            player.x < platform.x + platform.w &&
-            player.y + player.height > platform.y &&
-            player.y + player.height < platform.y + platform.h + 20 &&
-            player.velY > 0) {
+        if (player.velY > 0 && 
+            player.y + player.radius > platform.y && 
+            player.y - player.radius < platform.y + platform.h &&
+            player.x + player.radius > platform.x && 
+            player.x - player.radius < platform.x + platform.w) {
           
-          player.y = platform.y - player.height;
+          player.y = platform.y - player.radius;
           player.velY = 0;
-          player.jumping = false;
           player.grounded = true;
+          player.jumping = false;
         }
       });
       
-      // Colisión con plataforma que desaparece (solo si está visible)
+      // Colisión con plataforma desapareciente
       if (disappearingPlatform.visible) {
         const plat = disappearingPlatform;
-        if (player.x + player.width > plat.x && 
-            player.x < plat.x + plat.w &&
-            player.y + player.height > plat.y &&
-            player.y + player.height < plat.y + plat.h + 20 &&
-            player.velY > 0) {
+        if (player.velY > 0 && 
+            player.y + player.radius > plat.y && 
+            player.y - player.radius < plat.y + plat.h &&
+            player.x + player.radius > plat.x && 
+            player.x - player.radius < plat.x + plat.w) {
           
-          player.y = plat.y - player.height;
+          player.y = plat.y - player.radius;
           player.velY = 0;
-          player.jumping = false;
           player.grounded = true;
+          player.jumping = false;
         }
       }
       
@@ -288,100 +271,95 @@
       ghosts.forEach(ghost => {
         if (!ghost.alive) return;
         
-        ghost.x += ghost.dir * 0.8;
-        
-        // Cambiar dirección al llegar al límite
+        ghost.x += ghost.dir * 0.9;
         if (ghost.x > ghost.startX + ghost.range || ghost.x < ghost.startX - ghost.range) {
           ghost.dir *= -1;
         }
         
         // Colisión con fantasma
-        if (player.x + player.width > ghost.x && 
-            player.x < ghost.x + ghost.w &&
-            player.y + player.height > ghost.y &&
-            player.y < ghost.y + ghost.h) {
-          
-          // Si salta ENCIMA del fantasma
-          if (player.velY > 0 && player.y + player.height < ghost.y + ghost.h / 2) {
-            ghost.alive = false; // Fantasma muere
-            player.velY = -6; // pequeño rebote
+        const dx = player.x - ghost.x;
+        const dy = player.y - ghost.y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+        
+        if (distance < player.radius + ghost.radius && ghost.alive) {
+          if (player.velY > 0 && player.y < ghost.y) {
+            ghost.alive = false;
+            player.velY = -8;
           } 
-          // Si tiene espada y toca de frente
           else if (gameState.hasSword) {
             ghost.alive = false;
           } 
-          // Si no tiene espada y toca de frente
-          else if (gameState.lives > 0) {
-            gameState.lives--;
-            resetPlayerPosition();
-            if (gameState.lives <= 0) {
-              gameState.gameOver = true;
-              gameOverScreen.style.display = 'flex';
-            }
+          else {
+            loseLife();
           }
         }
       });
       
       // Colisión con espada
-      if (!sword.collected && 
-          player.x + player.width > sword.x && 
-          player.x < sword.x + sword.w &&
-          player.y + player.height > sword.y &&
-          player.y < sword.y + sword.h) {
-        sword.collected = true;
-        gameState.hasSword = true;
-        gameState.swordCollected = true;
-        player.emoji = '💂'; // Cambia a caballero con espada
-      }
-      
-      // Colisión con cerveza (final)
-      if (!beer.collected && 
-          player.x + player.width > beer.x && 
-          player.x < beer.x + beer.w &&
-          player.y + player.height > beer.y &&
-          player.y < beer.y + beer.h) {
-        beer.collected = true;
-        gameState.levelComplete = true;
-        gameState.playing = false;
-        levelCompleteScreen.style.display = 'flex';
-      }
-      
-      // Caer en abismo
-      if (player.y > canvas.height) {
-        gameState.lives--;
-        resetPlayerPosition();
-        if (gameState.lives <= 0) {
-          gameState.gameOver = true;
-          gameOverScreen.style.display = 'flex';
+      if (!sword.collected) {
+        const dx = player.x - sword.x;
+        const dy = player.y - sword.y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+        if (distance < player.radius + sword.radius) {
+          sword.collected = true;
+          gameState.hasSword = true;
+          gameState.swordCollected = true;
         }
       }
       
-      // Actualizar plataforma que desaparece
+      // Colisión con cerveza
+      if (!beer.collected) {
+        const dx = player.x - beer.x;
+        const dy = player.y - beer.y;
+        const distance = Math.sqrt(dx*dx + dy*dy);
+        if (distance < player.radius + beer.radius) {
+          beer.collected = true;
+          gameState.levelComplete = true;
+          gameState.playing = false;
+          levelCompleteScreen.style.display = 'flex';
+        }
+      }
+      
+      // Caer en abismo
+      if (player.y > LEVEL_HEIGHT + 50) {
+        loseLife();
+      }
+      
+      // Actualizar plataforma desapareciente
       disappearingPlatform.timer++;
-      if (disappearingPlatform.state === 'visible' && disappearingPlatform.timer > disappearingPlatform.visibleTime / 16) {
+      if (disappearingPlatform.state === 'visible' && disappearingPlatform.timer > disappearingPlatform.visibleTime) {
         disappearingPlatform.visible = false;
         disappearingPlatform.state = 'invisible';
         disappearingPlatform.timer = 0;
-      } else if (disappearingPlatform.state === 'invisible' && disappearingPlatform.timer > disappearingPlatform.invisibleTime / 16) {
+      } else if (disappearingPlatform.state === 'invisible' && disappearingPlatform.timer > disappearingPlatform.invisibleTime) {
         disappearingPlatform.visible = true;
         disappearingPlatform.state = 'visible';
         disappearingPlatform.timer = 0;
       }
       
-      // Limitar jugador a los bordes del nivel
-      if (player.x < 10) player.x = 10;
-      if (player.x > 1050) player.x = 1050; // Final del nivel
+      // Límites horizontales
+      if (player.x < player.radius) player.x = player.radius;
+      if (player.x > LEVEL_WIDTH - player.radius) player.x = LEVEL_WIDTH - player.radius;
+      
+      // Actualizar cámara
+      camera.update(player);
     }
     
-    function resetPlayerPosition() {
-      player.x = 30;
-      player.y = player.baseY - player.height;
+    function loseLife() {
+      gameState.lives--;
+      player.x = 50;
+      player.y = 100;
       player.velY = 0;
       player.direction = 1;
+      player.currentEmoji = player.emojiRight;
+      
+      if (gameState.lives <= 0) {
+        gameState.gameOver = true;
+        gameOverScreen.style.display = 'flex';
+      }
     }
     
     function resetGame() {
-      // Resetear estado
       gameState.playing = true;
       gameState.lives = 3;
       gameState.hasSword = false;
@@ -390,12 +368,11 @@
       gameState.swordCollected = false;
       gameState.beerCollected = false;
       
-      // Resetear objetos
-      player.x = 30;
-      player.y = player.baseY - player.height;
+      player.x = 50;
+      player.y = 100;
       player.velY = 0;
       player.direction = 1;
-      player.emoji = '🤴';
+      player.currentEmoji = player.emojiRight;
       
       ghosts.forEach(ghost => { ghost.alive = true; });
       sword.collected = false;
@@ -404,7 +381,6 @@
       disappearingPlatform.state = 'visible';
       disappearingPlatform.timer = 0;
       
-      // Ocultar pantallas
       gameOverScreen.style.display = 'none';
       levelCompleteScreen.style.display = 'none';
     }
@@ -413,94 +389,120 @@
     // DIBUJAR EN PANTALLA
     // ======================
     function draw() {
-      // Fondo (cielo)
+      // Fondo
       ctx.fillStyle = '#87CEEB';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      // Nubes decorativas
-      ctx.fillStyle = 'white';
-      ctx.beginPath();
-      ctx.arc(100, 40, 20, 0, Math.PI * 2);
-      ctx.arc(130, 35, 25, 0, Math.PI * 2);
-      ctx.arc(160, 45, 20, 0, Math.PI * 2);
-      ctx.fill();
+      // Nubes
+      drawCloud(100 - camera.x, 30);
+      drawCloud(300 - camera.x, 25);
+      drawCloud(600 - camera.x, 40);
+      drawCloud(900 - camera.x, 35);
       
-      ctx.beginPath();
-      ctx.arc(300, 30, 15, 0, Math.PI * 2);
-      ctx.arc(320, 25, 20, 0, Math.PI * 2);
-      ctx.arc(340, 30, 15, 0, Math.PI * 2);
-      ctx.fill();
-      
-      // Dibujar plataformas
+      // Plataformas
       platforms.forEach(platform => {
+        if (platform.x + platform.w < camera.x || platform.x > camera.x + canvas.width) return;
         ctx.fillStyle = platform.color;
-        ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
-        
-        // Detalle de césped
+        ctx.fillRect(platform.x - camera.x, platform.y, platform.w, platform.h);
         ctx.fillStyle = '#4CAF50';
-        ctx.fillRect(platform.x, platform.y, platform.w, 5);
+        ctx.fillRect(platform.x - camera.x, platform.y, platform.w, 5);
       });
       
-      // Dibujar plataforma que desaparece (si está visible)
+      // Plataforma desapareciente
       if (disappearingPlatform.visible) {
-        ctx.fillStyle = '#795548';
-        ctx.fillRect(disappearingPlatform.x, disappearingPlatform.y, disappearingPlatform.w, disappearingPlatform.h);
-        ctx.fillStyle = '#A5D6A7';
-        ctx.fillRect(disappearingPlatform.x, disappearingPlatform.y, disappearingPlatform.w, 5);
-        
-        // Efecto de "desapareciendo"
-        ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
-        ctx.fillRect(disappearingPlatform.x, disappearingPlatform.y - 5, disappearingPlatform.w, 5);
-      }
-      
-      // Dibujar espada (si no está recogida)
-      if (!sword.collected) {
-        ctx.font = '25px Arial';
-        ctx.fillText(sword.emoji, sword.x, sword.y + 25);
-      }
-      
-      // Dibujar cerveza (siempre visible)
-      ctx.font = '35px Arial';
-      ctx.fillText(beer.emoji, beer.x, beer.y + 35);
-      
-      // Dibujar fantasmas vivos
-      ghosts.forEach(ghost => {
-        if (ghost.alive) {
-          ctx.font = '30px Arial';
-          ctx.fillText(ghost.emoji, ghost.x, ghost.y + 25);
+        const plat = disappearingPlatform;
+        if (plat.x + plat.w >= camera.x && plat.x <= camera.x + canvas.width) {
+          ctx.fillStyle = '#795548';
+          ctx.fillRect(plat.x - camera.x, plat.y, plat.w, plat.h);
+          ctx.fillStyle = '#A5D6A7';
+          ctx.fillRect(plat.x - camera.x, plat.y, plat.w, 5);
+          ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+          ctx.fillRect(plat.x - camera.x, plat.y - 5, plat.w, 5);
         }
+      }
+      
+      // Espada
+      if (!sword.collected && sword.x >= camera.x && sword.x <= camera.x + canvas.width) {
+        ctx.fillStyle = sword.color;
+        ctx.beginPath();
+        ctx.moveTo(sword.x - camera.x, sword.y + 15);
+        ctx.lineTo(sword.x - camera.x - 8, sword.y - 5);
+        ctx.lineTo(sword.x - camera.x + 8, sword.y - 5);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(sword.x - camera.x - 3, sword.y + 15, 6, 10);
+      }
+      
+      // Cerveza
+      if (beer.x >= camera.x && beer.x <= camera.x + canvas.width) {
+        ctx.fillStyle = beer.color;
+        ctx.fillRect(beer.x - camera.x - 8, beer.y - 15, 16, 25);
+        ctx.fillStyle = '#ffcc00';
+        ctx.fillRect(beer.x - camera.x - 6, beer.y - 13, 12, 20);
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(beer.x - camera.x - 10, beer.y - 15, 20, 5);
+      }
+      
+      // Fantasmas
+      ghosts.forEach(ghost => {
+        if (!ghost.alive || ghost.x + ghost.radius < camera.x || ghost.x - ghost.radius > camera.x + canvas.width) return;
+        ctx.fillStyle = ghost.color;
+        ctx.beginPath();
+        ctx.arc(ghost.x - camera.x, ghost.y, ghost.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(ghost.x - camera.x - 4, ghost.y - 2, 2, 0, Math.PI * 2);
+        ctx.arc(ghost.x - camera.x + 4, ghost.y - 2, 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(ghost.x - camera.x, ghost.y + 2, 3, 0, Math.PI);
+        ctx.stroke();
       });
       
-      // Dibujar jugador
-      ctx.font = '30px Arial';
-      ctx.fillText(player.emoji, player.x, player.y + 30);
+      // JUGADOR: Dibujar emoji (siempre centrado en su posición)
+      ctx.font = '24px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(player.currentEmoji, player.x - camera.x, player.y);
       
-      // Dibujar vidas
-      ctx.fillStyle = 'red';
+      // Vidas
+      ctx.fillStyle = '#ff4444';
       ctx.font = '20px Arial';
+      ctx.textAlign = 'left';
       ctx.fillText(`❤️ x ${gameState.lives}`, 10, 25);
       
       // Indicador de espada
       if (gameState.hasSword) {
-        ctx.fillStyle = 'gold';
+        ctx.fillStyle = '#ffd700';
         ctx.font = '18px Arial';
-        ctx.fillText('⚔️ ESPADA', canvas.width - 100, 25);
+        ctx.textAlign = 'right';
+        ctx.fillText('⚔️ ESPADA', canvas.width - 10, 25);
       }
-      
-      // Zona de abismos (visual)
-      ctx.fillStyle = '#1a1a2e';
-      // Abismos pantalla 1
-      ctx.fillRect(80, player.baseY, 60, 40);
-      ctx.fillRect(200, player.baseY, 60, 40);
-      // Abismo antes de la espada
-      ctx.fillRect(480, player.baseY, 40, 40);
-      // Abismo final
-      ctx.fillRect(1000, player.baseY, 30, 40);
       
       // Texto de nivel
       ctx.fillStyle = '#2E1B1B';
       ctx.font = '16px Arial';
-      ctx.fillText('NIVEL 1: PRADERA DEL CABALLERO', canvas.width/2 - 100, canvas.height - 10);
+      ctx.textAlign = 'center';
+      ctx.fillText('NIVEL 1: PRADERA DEL CABALLERO', canvas.width/2, canvas.height - 10);
+      
+      // Abismos (decoración visual)
+      ctx.fillStyle = '#1a1a2e';
+      if (80 > camera.x && 140 < camera.x + canvas.width) ctx.fillRect(80 - camera.x, 160, 60, 40);
+      if (200 > camera.x && 260 < camera.x + canvas.width) ctx.fillRect(200 - camera.x, 160, 60, 40);
+      if (480 > camera.x && 520 < camera.x + canvas.width) ctx.fillRect(480 - camera.x, 160, 40, 40);
+      if (1000 > camera.x && 1030 < camera.x + canvas.width) ctx.fillRect(1000 - camera.x, 160, 30, 40);
+    }
+    
+    function drawCloud(x, y) {
+      if (x + 50 < 0 || x > canvas.width) return;
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(x, y, 15, 0, Math.PI * 2);
+      ctx.arc(x + 20, y - 5, 18, 0, Math.PI * 2);
+      ctx.arc(x + 40, y, 15, 0, Math.PI * 2);
+      ctx.fill();
     }
     
     // ======================
@@ -512,7 +514,6 @@
       requestAnimationFrame(gameLoop);
     }
     
-    // Iniciar juego
     resetGame();
     gameLoop();
   </script>

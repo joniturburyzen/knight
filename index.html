@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Caballero Medieval - Nivel 1</title>
+  <style>
+    * { margin: 0; padding: 0; touch-action: none; }
+    body {
+      background: #1a1a2e;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 3px solid #4e4e7a;
+      border-radius: 8px;
+      background: #87CEEB;
+      box-shadow: 0 0 20px rgba(0,0,0,0.5);
+      max-width: 100%;
+      max-height: 90vh;
+    }
+    #gameOver, #levelComplete {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.85);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      font-size: 24px;
+      display: none;
+      text-align: center;
+      padding: 20px;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 12px 30px;
+      font-size: 18px;
+      border-radius: 30px;
+      margin-top: 20px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    }
+    button:hover { background: #45a049; }
+    #instructions {
+      position: absolute;
+      bottom: 10px;
+      color: white;
+      background: rgba(0,0,0,0.6);
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-size: 14px;
+      text-align: center;
+      max-width: 90%;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="360" height="200"></canvas>
+  
+  <div id="gameOver">
+    <div>☠️ ¡HAS PERDIDO!</div>
+    <div style="font-size:18px; margin:10px 0">Vidas agotadas</div>
+    <button onclick="resetGame()">🔁 Jugar de nuevo</button>
+  </div>
+  
+  <div id="levelComplete">
+    <div>🎉 ¡NIVEL 1 COMPLETADO!</div>
+    <div style="font-size:18px; margin:10px 0">¡Embriagado y victorioso! 🍻</div>
+    <button onclick="resetGame()">➡️ Siguiente nivel (próximamente)</button>
+  </div>
+  
+  <div id="instructions">
+    SWIPE IZQ/DER: Cambiar dirección<br>
+    TOCA PANTALLA: Saltar
+  </div>
+
+  <script>
+    // ======================
+    // CONFIGURACIÓN INICIAL
+    // ======================
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const gameOverScreen = document.getElementById('gameOver');
+    const levelCompleteScreen = document.getElementById('levelComplete');
+    
+    // Estado del juego
+    const gameState = {
+      playing: true,
+      lives: 3,
+      hasSword: false,
+      levelComplete: false,
+      gameOver: false,
+      swordCollected: false,
+      beerCollected: false
+    };
+    
+    // ======================
+    // JUGADOR (CABALLERO)
+    // ======================
+    const player = {
+      x: 30, // Empieza a la izquierda
+      y: 0,
+      width: 20,
+      height: 30,
+      speed: 1.5,
+      direction: 1, // 1 = derecha, -1 = izquierda
+      velY: 0,
+      jumping: false,
+      grounded: false,
+      emoji: '🤴', // Caballero sin espada
+      baseY: canvas.height - 40 // Nivel del suelo base
+    };
+    player.y = player.baseY - player.height; // Posición inicial en el suelo
+    
+    // ======================
+    // PLATAFORMAS Y NIVEL
+    // ======================
+    const platforms = [
+      // PANTALLA 1 (0-360px): Abismos para saltar
+      {x: 0, y: player.baseY, w: 80, h: 20, color: '#8B4513'},   // Plataforma inicio
+      {x: 140, y: player.baseY, w: 60, h: 20, color: '#8B4513'}, // Primera plataforma después de abismo
+      {x: 260, y: player.baseY, w: 100, h: 20, color: '#8B4513'},// Segunda plataforma
+      
+      // PANTALLA 2 (360-720px): Fantasma + Espada + Plataforma desapareciente
+      {x: 360, y: player.baseY, w: 120, h: 20, color: '#5D4037'}, // Suelo inicio pantalla 2
+      {x: 520, y: player.baseY - 80, w: 60, h: 15, color: '#4E342E'}, // Plataforma media para espada
+      {x: 580, y: player.baseY - 150, w: 60, h: 15, color: '#3E2723'}, // Plataforma ALTA de la espada
+      {x: 650, y: player.baseY, w: 70, h: 20, color: '#5D4037'}, // Suelo después de espada
+      
+      // PANTALLA 3 (720-1080px): Final con cerveza
+      {x: 720, y: player.baseY, w: 100, h: 20, color: '#3E2723'}, // Suelo inicio pantalla 3
+      {x: 850, y: player.baseY, w: 150, h: 20, color: '#2E1B1B'}, // Suelo antes del abismo final
+      {x: 1030, y: player.baseY, w: 50, h: 20, color: '#FFD700'}  // Plataforma final con cerveza
+    ];
+    
+    // Plataforma que desaparece (Pantalla 2 -> Pantalla 3)
+    const disappearingPlatform = {
+      x: 780,
+      y: player.baseY,
+      w: 70,
+      h: 20,
+      visible: true,
+      visibleTime: 2000, // Visible 2 segundos
+      invisibleTime: 3000, // Invisible 3 segundos
+      timer: 0,
+      state: 'visible' // 'visible' o 'invisible'
+    };
+    
+    // ======================
+    // ENEMIGOS (FANTASMAS)
+    // ======================
+    const ghosts = [
+      // Fantasma 1: Pantalla 2 (nada más empezar)
+      {x: 400, y: player.baseY - 30, w: 25, h: 30, 
+       dir: -1, range: 60, startX: 400, emoji: '👻', alive: true},
+      
+      // Fantasma 2: Después de la espada
+      {x: 870, y: player.baseY - 30, w: 25, h: 30, 
+       dir: 1, range: 80, startX: 870, emoji: '👻', alive: true},
+      
+      // Fantasma 3: Cerca del final
+      {x: 920, y: player.baseY - 30, w: 25, h: 30, 
+       dir: -1, range: 50, startX: 920, emoji: '👻', alive: true}
+    ];
+    
+    // ======================
+    // POWER-UPS Y OBJETIVOS
+    // ======================
+    const sword = {
+      x: 605, 
+      y: player.baseY - 175, 
+      w: 25, 
+      h: 25, 
+      collected: false,
+      emoji: '⚔️'
+    };
+    
+    const beer = {
+      x: 1045,
+      y: player.baseY - 40,
+      w: 30,
+      h: 40,
+      collected: false,
+      emoji: '🍺'
+    };
+    
+    // ======================
+    // FÍSICA Y CONTROLES
+    // ======================
+    const gravity = 0.5;
+    const jumpPower = -11;
+    let touchStartX = 0;
+    let touchStartTime = 0;
+    const swipeThreshold = 50; // px para detectar swipe
+    const maxTapTime = 300; // ms para diferenciar tap de swipe
+    
+    // Detectar swipe y toque
+    canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      touchStartX = e.touches[0].clientX;
+      touchStartTime = Date.now();
+    }, { passive: false });
+    
+    canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchDuration = Date.now() - touchStartTime;
+      const diffX = touchEndX - touchStartX;
+      
+      // Si fue un swipe (movimiento rápido y largo)
+      if (Math.abs(diffX) > swipeThreshold && touchDuration < 500) {
+        player.direction = (diffX > 0) ? 1 : -1; // Derecha si swipe positivo
+      } 
+      // Si fue un toque corto (salto)
+      else if (touchDuration < maxTapTime && !player.jumping) {
+        player.velY = jumpPower;
+        player.jumping = true;
+      }
+    }, { passive: false });
+    
+    // ======================
+    // LÓGICA DEL JUEGO
+    // ======================
+    function update() {
+      if (!gameState.playing || gameState.levelComplete || gameState.gameOver) return;
+      
+      // Movimiento horizontal automático (siempre en movimiento)
+      player.x += player.speed * player.direction;
+      
+      // Gravedad y salto
+      player.velY += gravity;
+      player.y += player.velY;
+      
+      // Colisión con suelo base
+      if (player.y + player.height > player.baseY) {
+        player.y = player.baseY - player.height;
+        player.velY = 0;
+        player.jumping = false;
+        player.grounded = true;
+      } else {
+        player.grounded = false;
+      }
+      
+      // Colisión con plataformas
+      player.grounded = false;
+      platforms.forEach(platform => {
+        if (player.x + player.width > platform.x && 
+            player.x < platform.x + platform.w &&
+            player.y + player.height > platform.y &&
+            player.y + player.height < platform.y + platform.h + 20 &&
+            player.velY > 0) {
+          
+          player.y = platform.y - player.height;
+          player.velY = 0;
+          player.jumping = false;
+          player.grounded = true;
+        }
+      });
+      
+      // Colisión con plataforma que desaparece (solo si está visible)
+      if (disappearingPlatform.visible) {
+        const plat = disappearingPlatform;
+        if (player.x + player.width > plat.x && 
+            player.x < plat.x + plat.w &&
+            player.y + player.height > plat.y &&
+            player.y + player.height < plat.y + plat.h + 20 &&
+            player.velY > 0) {
+          
+          player.y = plat.y - player.height;
+          player.velY = 0;
+          player.jumping = false;
+          player.grounded = true;
+        }
+      }
+      
+      // Actualizar fantasmas
+      ghosts.forEach(ghost => {
+        if (!ghost.alive) return;
+        
+        ghost.x += ghost.dir * 0.8;
+        
+        // Cambiar dirección al llegar al límite
+        if (ghost.x > ghost.startX + ghost.range || ghost.x < ghost.startX - ghost.range) {
+          ghost.dir *= -1;
+        }
+        
+        // Colisión con fantasma
+        if (player.x + player.width > ghost.x && 
+            player.x < ghost.x + ghost.w &&
+            player.y + player.height > ghost.y &&
+            player.y < ghost.y + ghost.h) {
+          
+          // Si salta ENCIMA del fantasma
+          if (player.velY > 0 && player.y + player.height < ghost.y + ghost.h / 2) {
+            ghost.alive = false; // Fantasma muere
+            player.velY = -6; // pequeño rebote
+          } 
+          // Si tiene espada y toca de frente
+          else if (gameState.hasSword) {
+            ghost.alive = false;
+          } 
+          // Si no tiene espada y toca de frente
+          else if (gameState.lives > 0) {
+            gameState.lives--;
+            resetPlayerPosition();
+            if (gameState.lives <= 0) {
+              gameState.gameOver = true;
+              gameOverScreen.style.display = 'flex';
+            }
+          }
+        }
+      });
+      
+      // Colisión con espada
+      if (!sword.collected && 
+          player.x + player.width > sword.x && 
+          player.x < sword.x + sword.w &&
+          player.y + player.height > sword.y &&
+          player.y < sword.y + sword.h) {
+        sword.collected = true;
+        gameState.hasSword = true;
+        gameState.swordCollected = true;
+        player.emoji = '💂'; // Cambia a caballero con espada
+      }
+      
+      // Colisión con cerveza (final)
+      if (!beer.collected && 
+          player.x + player.width > beer.x && 
+          player.x < beer.x + beer.w &&
+          player.y + player.height > beer.y &&
+          player.y < beer.y + beer.h) {
+        beer.collected = true;
+        gameState.levelComplete = true;
+        gameState.playing = false;
+        levelCompleteScreen.style.display = 'flex';
+      }
+      
+      // Caer en abismo
+      if (player.y > canvas.height) {
+        gameState.lives--;
+        resetPlayerPosition();
+        if (gameState.lives <= 0) {
+          gameState.gameOver = true;
+          gameOverScreen.style.display = 'flex';
+        }
+      }
+      
+      // Actualizar plataforma que desaparece
+      disappearingPlatform.timer++;
+      if (disappearingPlatform.state === 'visible' && disappearingPlatform.timer > disappearingPlatform.visibleTime / 16) {
+        disappearingPlatform.visible = false;
+        disappearingPlatform.state = 'invisible';
+        disappearingPlatform.timer = 0;
+      } else if (disappearingPlatform.state === 'invisible' && disappearingPlatform.timer > disappearingPlatform.invisibleTime / 16) {
+        disappearingPlatform.visible = true;
+        disappearingPlatform.state = 'visible';
+        disappearingPlatform.timer = 0;
+      }
+      
+      // Limitar jugador a los bordes del nivel
+      if (player.x < 10) player.x = 10;
+      if (player.x > 1050) player.x = 1050; // Final del nivel
+    }
+    
+    function resetPlayerPosition() {
+      player.x = 30;
+      player.y = player.baseY - player.height;
+      player.velY = 0;
+      player.direction = 1;
+    }
+    
+    function resetGame() {
+      // Resetear estado
+      gameState.playing = true;
+      gameState.lives = 3;
+      gameState.hasSword = false;
+      gameState.levelComplete = false;
+      gameState.gameOver = false;
+      gameState.swordCollected = false;
+      gameState.beerCollected = false;
+      
+      // Resetear objetos
+      player.x = 30;
+      player.y = player.baseY - player.height;
+      player.velY = 0;
+      player.direction = 1;
+      player.emoji = '🤴';
+      
+      ghosts.forEach(ghost => { ghost.alive = true; });
+      sword.collected = false;
+      beer.collected = false;
+      disappearingPlatform.visible = true;
+      disappearingPlatform.state = 'visible';
+      disappearingPlatform.timer = 0;
+      
+      // Ocultar pantallas
+      gameOverScreen.style.display = 'none';
+      levelCompleteScreen.style.display = 'none';
+    }
+    
+    // ======================
+    // DIBUJAR EN PANTALLA
+    // ======================
+    function draw() {
+      // Fondo (cielo)
+      ctx.fillStyle = '#87CEEB';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Nubes decorativas
+      ctx.fillStyle = 'white';
+      ctx.beginPath();
+      ctx.arc(100, 40, 20, 0, Math.PI * 2);
+      ctx.arc(130, 35, 25, 0, Math.PI * 2);
+      ctx.arc(160, 45, 20, 0, Math.PI * 2);
+      ctx.fill();
+      
+      ctx.beginPath();
+      ctx.arc(300, 30, 15, 0, Math.PI * 2);
+      ctx.arc(320, 25, 20, 0, Math.PI * 2);
+      ctx.arc(340, 30, 15, 0, Math.PI * 2);
+      ctx.fill();
+      
+      // Dibujar plataformas
+      platforms.forEach(platform => {
+        ctx.fillStyle = platform.color;
+        ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
+        
+        // Detalle de césped
+        ctx.fillStyle = '#4CAF50';
+        ctx.fillRect(platform.x, platform.y, platform.w, 5);
+      });
+      
+      // Dibujar plataforma que desaparece (si está visible)
+      if (disappearingPlatform.visible) {
+        ctx.fillStyle = '#795548';
+        ctx.fillRect(disappearingPlatform.x, disappearingPlatform.y, disappearingPlatform.w, disappearingPlatform.h);
+        ctx.fillStyle = '#A5D6A7';
+        ctx.fillRect(disappearingPlatform.x, disappearingPlatform.y, disappearingPlatform.w, 5);
+        
+        // Efecto de "desapareciendo"
+        ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+        ctx.fillRect(disappearingPlatform.x, disappearingPlatform.y - 5, disappearingPlatform.w, 5);
+      }
+      
+      // Dibujar espada (si no está recogida)
+      if (!sword.collected) {
+        ctx.font = '25px Arial';
+        ctx.fillText(sword.emoji, sword.x, sword.y + 25);
+      }
+      
+      // Dibujar cerveza (siempre visible)
+      ctx.font = '35px Arial';
+      ctx.fillText(beer.emoji, beer.x, beer.y + 35);
+      
+      // Dibujar fantasmas vivos
+      ghosts.forEach(ghost => {
+        if (ghost.alive) {
+          ctx.font = '30px Arial';
+          ctx.fillText(ghost.emoji, ghost.x, ghost.y + 25);
+        }
+      });
+      
+      // Dibujar jugador
+      ctx.font = '30px Arial';
+      ctx.fillText(player.emoji, player.x, player.y + 30);
+      
+      // Dibujar vidas
+      ctx.fillStyle = 'red';
+      ctx.font = '20px Arial';
+      ctx.fillText(`❤️ x ${gameState.lives}`, 10, 25);
+      
+      // Indicador de espada
+      if (gameState.hasSword) {
+        ctx.fillStyle = 'gold';
+        ctx.font = '18px Arial';
+        ctx.fillText('⚔️ ESPADA', canvas.width - 100, 25);
+      }
+      
+      // Zona de abismos (visual)
+      ctx.fillStyle = '#1a1a2e';
+      // Abismos pantalla 1
+      ctx.fillRect(80, player.baseY, 60, 40);
+      ctx.fillRect(200, player.baseY, 60, 40);
+      // Abismo antes de la espada
+      ctx.fillRect(480, player.baseY, 40, 40);
+      // Abismo final
+      ctx.fillRect(1000, player.baseY, 30, 40);
+      
+      // Texto de nivel
+      ctx.fillStyle = '#2E1B1B';
+      ctx.font = '16px Arial';
+      ctx.fillText('NIVEL 1: PRADERA DEL CABALLERO', canvas.width/2 - 100, canvas.height - 10);
+    }
+    
+    // ======================
+    // BUCLE PRINCIPAL
+    // ======================
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // Iniciar juego
+    resetGame();
+    gameLoop();
+  </script>
+</body>
+</html>
